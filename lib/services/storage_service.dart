@@ -13,7 +13,7 @@ class StorageService {
   // Path file
   static Future<File> _localFile() async {
     final dir = await _appDir();
-    return File('\${dir.path}/\$fileName');
+    return File('${dir.path}/$fileName');
   }
 
   // Menyimpan list note ke file

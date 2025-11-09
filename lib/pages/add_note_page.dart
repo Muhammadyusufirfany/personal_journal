@@ -28,8 +28,9 @@ class _AddNotePageState extends State<AddNotePage> {
       _titleCtl.text = widget.note!.title;
       _contentCtl.text = widget.note!.content;
       _selected = widget.note!.dateTime;
-      if (widget.note!.imagePath != null)
+      if (widget.note!.imagePath != null) {
         _imageFile = File(widget.note!.imagePath!);
+      }
     }
   }
 
