@@ -1,10 +1,11 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:video_player/video_player.dart';
+
 import '../models/note.dart';
 import '../services/storage_service.dart';
-import 'add_note_page.dart';
-import 'gallery_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,248 +14,183 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage>
-    with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage> {
   List<Note> _notes = [];
-  late TabController _tabController;
-  final DateFormat _fmt = DateFormat('dd MMM yyyy HH:mm');
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _loadNotes();
   }
 
   Future<void> _loadNotes() async {
     final notes = await StorageService.readNotes();
     setState(() {
-      _notes = notes;
+      _notes = notes.reversed.toList(); // show newest first
+      _loading = false;
     });
-  }
-
-  Future<void> _saveNotes() async {
-    await StorageService.saveNotes(_notes);
-  }
-
-  void _addOrUpdateNote(Note note, {bool isUpdate = false}) {
-    setState(() {
-      if (isUpdate) {
-        final idx = _notes.indexWhere((n) => n.id == note.id);
-        if (idx != -1) _notes[idx] = note;
-      } else {
-        _notes.insert(0, note);
-      }
-    });
-    _saveNotes();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Catatan disimpan')));
-  }
-
-  void _deleteNote(String id) {
-    setState(() {
-      _notes.removeWhere((n) => n.id == id);
-    });
-    _saveNotes();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Catatan dihapus')));
-  }
-
-  void _openAddNote() async {
-    final result = await Navigator.push(
-        context, MaterialPageRoute(builder: (_) => AddNotePage(note: null)));
-    if (result is Note) {
-      _addOrUpdateNote(result);
-    }
-  }
-
-  void _openEditNote(Note note) async {
-    final result = await Navigator.push(
-        context, MaterialPageRoute(builder: (_) => AddNotePage(note: note)));
-    if (result is Note) {
-      _addOrUpdateNote(result, isUpdate: true);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Personal Journal'),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'clear') {
-                showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                          title: const Text('Konfirmasi'),
-                          content: const Text('Hapus semua catatan?'),
-                          actions: [
-                            TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Batal')),
-                            TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _notes.clear();
-                                  });
-                                  _saveNotes();
-                                  Navigator.pop(context);
-                                },
-                                child: const Text('Hapus')),
-                          ],
-                        ));
-              }
-            },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(value: 'clear', child: Text('Hapus semua'))
+    if (_loading) return const Center(child: CircularProgressIndicator());
+
+    if (_notes.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.book, size: 80, color: Colors.indigo),
+              SizedBox(height: 20),
+              Text(
+                "Selamat Datang di Personal Journal",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 12),
+              Text(
+                "Belum ada catatan. Buat catatan baru pada tab Notes.",
+                textAlign: TextAlign.center,
+              ),
             ],
-          )
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Home', icon: Icon(Icons.home)),
-            Tab(text: 'Tambah', icon: Icon(Icons.note_add)),
-            Tab(text: 'Galeri', icon: Icon(Icons.photo))
-          ],
+          ),
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildHomeTab(),
-          Center(
-              child: ElevatedButton.icon(
-                  onPressed: _openAddNote,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Tambah Catatan'))),
-          GalleryPage(notes: _notes),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddNote,
-        child: const Icon(Icons.add),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadNotes,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: _notes.length,
+        itemBuilder: (context, index) {
+          final note = _notes[index];
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: ListTile(
+              leading: note.imagePath != null
+                  ? Icon(
+                      note.imagePath!.endsWith('.mp4')
+                          ? Icons.videocam
+                          : Icons.photo,
+                      color: Colors.indigo,
+                    )
+                  : const Icon(Icons.note, color: Colors.indigo),
+              title: Text(note.title),
+              subtitle: Text(
+                note.content,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Text(
+                DateFormat('dd/MM/yyyy').format(note.dateTime),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => NoteDetailPage(note: note),
+              )),
+            ),
+          );
+        },
       ),
     );
   }
+}
 
-  Widget _buildHomeTab() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: _notes.isEmpty
-            ? const Center(
-                child: Text('Belum ada catatan. Tekan + untuk menambah.'))
-            : ListView.builder(
-                itemCount: _notes.length,
-                itemBuilder: (ctx, i) {
-                  final n = _notes[i];
-                  return Card(
-                    elevation: 3,
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    child: InkWell(
-                      onTap: () => _openEditNote(n),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Row(
-                          children: [
-                            if (n.imagePath != null)
-                              Container(
-                                width: 72,
-                                height: 72,
-                                decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
-                                    color: Colors.grey[200]),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.file(File(n.imagePath!),
-                                      fit: BoxFit.cover),
-                                ),
-                              )
-                            else
-                              Container(
-                                  width: 72,
-                                  height: 72,
-                                  alignment: Alignment.center,
-                                  child: const Icon(Icons.note, size: 36)),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(n.title,
-                                      style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 6),
-                                  Text(n.content,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(_fmt.format(n.dateTime),
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600])),
-                                      PopupMenuButton<String>(
-                                        onSelected: (val) {
-                                          if (val == 'edit') _openEditNote(n);
-                                          if (val == 'delete') {
-                                            showDialog(
-                                                context: context,
-                                                builder: (_) => AlertDialog(
-                                                      title: const Text(
-                                                          'Konfirmasi'),
-                                                      content: const Text(
-                                                          'Hapus catatan ini?'),
-                                                      actions: [
-                                                        TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                    context),
-                                                            child: const Text(
-                                                                'Batal')),
-                                                        TextButton(
-                                                            onPressed: () {
-                                                              _deleteNote(n.id);
-                                                              Navigator.pop(
-                                                                  context);
-                                                            },
-                                                            child: const Text(
-                                                                'Hapus')),
-                                                      ],
-                                                    ));
-                                          }
-                                        },
-                                        itemBuilder: (ctx) => const [
-                                          PopupMenuItem(
-                                              value: 'edit',
-                                              child: Text('Edit')),
-                                          PopupMenuItem(
-                                              value: 'delete',
-                                              child: Text('Hapus'))
-                                        ],
-                                      )
-                                    ],
-                                  )
-                                ],
-                              ),
-                            )
-                          ],
-                        ),
-                      ),
+class NoteDetailPage extends StatefulWidget {
+  final Note note;
+
+  const NoteDetailPage({Key? key, required this.note}) : super(key: key);
+
+  @override
+  State<NoteDetailPage> createState() => _NoteDetailPageState();
+}
+
+class _NoteDetailPageState extends State<NoteDetailPage> {
+  VideoPlayerController? _videoController;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.note.imagePath != null &&
+        widget.note.imagePath!.toLowerCase().endsWith('.mp4')) {
+      _videoController =
+          VideoPlayerController.file(File(widget.note.imagePath!))
+            ..initialize().then((_) => setState(() {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final path = widget.note.imagePath;
+    final isVideo = path != null && path.toLowerCase().endsWith('.mp4');
+
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.note.title)),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (path != null) ...[
+                    Center(
+                      child: isVideo
+                          ? (_videoController != null &&
+                                  _videoController!.value.isInitialized
+                              ? AspectRatio(
+                                  aspectRatio:
+                                      _videoController!.value.aspectRatio,
+                                  child: VideoPlayer(_videoController!),
+                                )
+                              : const SizedBox(
+                                  height: 200,
+                                  child: Center(
+                                      child: CircularProgressIndicator())))
+                          : Image.file(File(path)),
                     ),
-                  );
-                },
+                    const SizedBox(height: 12),
+                  ],
+                  Text(widget.note.content,
+                      style: const TextStyle(fontSize: 16)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Tersimpan: ${DateFormat('dd/MM/yyyy HH:mm').format(widget.note.dateTime)}',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
               ),
+            ),
+          ),
+        ],
       ),
+      floatingActionButton: isVideo && _videoController != null
+          ? FloatingActionButton(
+              onPressed: () {
+                setState(() {
+                  if (_videoController!.value.isPlaying) {
+                    _videoController!.pause();
+                  } else {
+                    _videoController!.play();
+                  }
+                });
+              },
+              child: Icon(_videoController!.value.isPlaying
+                  ? Icons.pause
+                  : Icons.play_arrow),
+            )
+          : null,
     );
   }
 }
