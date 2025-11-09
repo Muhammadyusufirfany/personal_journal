@@ -26,7 +26,7 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
     // Ensure minimum SDK is at least 21 for modern Android APIs and plugin compatibility.
     // Set to 21 or higher as requested.
-    minSdk = flutter.minSdkVersion
+    minSdk = 21
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
