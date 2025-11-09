@@ -9,8 +9,9 @@ class GalleryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imgs = notes.where((n) => n.imagePath != null).toList();
-    if (imgs.isEmpty)
+    if (imgs.isEmpty) {
       return const Center(child: Text('Belum ada foto di galeri'));
+    }
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(12.0),
